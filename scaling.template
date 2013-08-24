@@ -1,0 +1,339 @@
+{
+    "AWSCloudFormationVersion": "2010-09-09",
+    "Description": "Scaling template",
+    "Parameters": {
+        "KeyName": {
+            "Type": "String"
+        },
+	"AwsAccessKey": {
+            "Type": "String"
+	},
+	"AwsSecretAccessKey": {
+	    "Type": "String"
+	},
+	"StackName": {
+	    "Type": "String"
+	}
+    },
+    "Resources": {
+        "WebServerConfig": {
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "config": {
+                        "packages": {
+                            "yum": {
+                                "gcc": [],
+                                "gcc-c++": [],
+                                "ruby": [],
+                                "ruby-devel": [],
+                                "mysql-server": [],
+                                "mysql-devel": [],
+                                "rubygems": [],
+                                "git": [],
+				"sysstat": [],
+				"python-pip" : [],
+				"python-devel" : [],
+				"libxml2-devel" : [],
+				"libxslt-devel" : []
+
+                            },
+                            "rubygems": {
+                                "bundler": [],
+                                "rails": []
+                            }
+                        },
+			"files" : {
+				"/etc/ec2-credentials.rc" : {
+					"content" : { "Fn::Join" : ["", [
+					      "export AWS_ACCESS_KEY_ID=", { "Ref" : "AwsAccessKey" }, ";\n",
+					      "export AWS_SECRET_ACCESS_KEY=", { "Ref" : "AwsSecretAccessKey" }, ";\n",
+					]]},
+					"mode"  : "000644",
+					"owner" : "root",
+    					"group" : "root"
+				}
+			}
+                        "commands": {
+                            "1-clone-repo": {
+                                "cwd": "~",
+                                "command": "git clone https://github.com/kkrol89/news-feed.git"
+                            },
+                            "2-run-bundler": {
+                                "cwd": "~/news-feed",
+                                "command": "bundle"
+                            },
+			    "3-start-mysqld" : {
+				"command" : "service mysqld start"
+			    },
+                            "4-setup-database": {
+                                "cwd": "~/news-feed",
+                                "command": "cp config/database.yml.example config/database.yml"
+                            },
+                            "5-create database": {
+                                "cwd": "~/news-feed",
+                                "command": "rake db:create"
+                            },
+                            "6-start-server": {
+                                "cwd": "~/news-feed",
+                                "command": "rails server -d"
+                            },
+                            "7-install-pbr": {
+                                "cwd": "~",
+                                "command": "git clone https://github.com/openstack-dev/pbr.git && cd pbr && sudo python setup.py install"
+                            },
+                            "8-install-heat-cfnclient": {
+                                "cwd": "~",
+                                "command": "git clone https://github.com/openstack-dev/heat-cfnclient.git && cd heat-cfnclient && sudo python setup.py install"
+                            },
+                            "9-install-sar-metrics": {
+                                "cwd": "~",
+                                "command": "echo \"10.1.1.1   monitoring.us-east-1.amazonaws.com\" >> /etc/hosts"
+                            },
+                            "10-install-sar-metrics": {
+                                "cwd": "~",
+                                "command": { "Fn::Join" : ["", [
+					"git clone && cd sar-metrics && ruby metrics-setup.rb scaling.template ", { "Ref" : "StackName" }
+				]]},
+                            }
+                        }
+                    }
+                }
+            },
+            "Type": "AWS::AutoScaling::LaunchConfiguration", 
+            "Properties": {
+                "SecurityGroups": [
+                    {
+                        "Ref": "DefaultSecurityGroup"
+                    }
+                ],
+                "ImageId": "F18-x86_64",
+                "InstanceType": "m1.small",
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "\n",
+                            [
+                                "#!/bin/bash -xe",
+                                "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1",
+                                "# Flush iptables's default rules",
+                                "/sbin/iptables -F",
+                                "/sbin/iptables -X",
+                                "# export proxies",
+                                "echo 'export http_proxy=http://10.197.217.62:3128' >> /etc/bashrc",
+                                "echo 'export https_proxy=http://10.197.217.62:3128' >> /etc/bashrc",
+                                "echo 'export no_proxy=127.0.0.1,localhost' >> /etc/bashrc",
+                                "echo proxy=http://10.197.217.62:3128/ >> /etc/yum.conf",
+                                "source /root/.bashrc",
+                                "echo \"127.0.0.1 $(cat /etc/hostname)\" >> /etc/hosts",
+                                "# calling cfn-init",
+                                "/opt/aws/bin/cfn-init"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "WebServerGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AvailabilityZones": {
+                    "Fn::GetAZs": ""
+                },
+                "LaunchConfigurationName": "WebServerConfig",
+                "MinSize": "2",
+                "MaxSize": "4"
+            }
+        },
+        "WebServerScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "WebServerGroup"
+                },
+                "Cooldown": "60",
+                "ScalingAdjustment": "1"
+            }
+        },
+        "WebServerScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "WebServerGroup"
+                },
+                "Cooldown": "60",
+                "ScalingAdjustment": "-1"
+            }
+        },
+        "MEMAlarmHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Scale-up if MEM > 70% for 1 minute",
+                "MetricName": "MemoryUtilization",
+                "Namespace": "system/linux",
+                "Statistic": "Average",
+                "Period": "60",
+                "EvaluationPeriods": "1",
+                "Threshold": "70",
+                "AlarmActions": [
+                    {
+                        "Ref": "WebServerScaleUpPolicy"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "WebServerGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "GreaterThanThreshold"
+            }
+        },
+        "MEMAlarmLow": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Scale-down if MEM < 30% for 1 minute",
+                "MetricName": "MemoryUtilization",
+                "Namespace": "system/linux",
+                "Statistic": "Average",
+                "Period": "60",
+                "EvaluationPeriods": "1",
+                "Threshold": "30",
+                "AlarmActions": [
+                    {
+                        "Ref": "WebServerScaleDownPolicy"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "WebServerGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "LessThanThreshold"
+            }
+        },
+        "CPUAlarmHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Scale-up if CPU > 90% for 1 minute",
+                "MetricName": "CPUUtilization",
+                "Namespace": "system/linux",
+                "Statistic": "Average",
+                "Period": "60",
+                "EvaluationPeriods": "1",
+                "Threshold": "90",
+                "AlarmActions": [
+                    {
+                        "Ref": "WebServerScaleUpPolicy"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "WebServerGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "GreaterThanThreshold"
+            }
+        },
+        "CPUAlarmLow": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Scale-down if CPU < 10% for 1 minute",
+                "MetricName": "CPUUtilization",
+                "Namespace": "system/linux",
+                "Statistic": "Average",
+                "Period": "60",
+                "EvaluationPeriods": "1",
+                "Threshold": "10",
+                "AlarmActions": [
+                    {
+                        "Ref": "WebServerScaleDownPolicy"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "WebServerGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator": "LessThanThreshold"
+            }
+        },
+        "DefaultSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow ssh connection to host",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "3000",
+                        "ToPort": "3000",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": []
+            }
+        },
+        "ElasticLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "AvailabilityZones": {
+                    "Fn::GetAZs": ""
+                },
+                "Listeners": [
+                    {
+                        "LoadBalancerPort": "80",
+                        "InstancePort": "3000",
+                        "Protocol": "HTTP"
+                    }
+                ],
+                "HealthCheck": {
+                    "Target": "HTTP:80/",
+                    "HealthyThreshold": "3",
+                    "UnhealthyThreshold": "5",
+                    "Interval": "30",
+                    "Timeout": "5"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "URL": {
+            "Description": "URL of the sample website",
+            "Value": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "http://",
+                        {
+                            "Fn::GetAtt": [
+                                "ElasticLoadBalancer",
+                                "DNSName"
+                            ]
+                        }
+                    ]
+                ]
+            }
+        }
+    }
+}
