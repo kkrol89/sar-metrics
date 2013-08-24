@@ -5,15 +5,15 @@
         "KeyName": {
             "Type": "String"
         },
-	"AwsAccessKey": {
+        "AwsAccessKey": {
             "Type": "String"
-	},
-	"AwsSecretAccessKey": {
-	    "Type": "String"
-	},
-	"StackName": {
-	    "Type": "String"
-	}
+        },
+        "AwsSecretAccessKey": {
+            "Type": "String"
+        },
+        "StackName": {
+            "Type": "String"
+        }
     },
     "Resources": {
         "WebServerConfig": {
@@ -30,29 +30,33 @@
                                 "mysql-devel": [],
                                 "rubygems": [],
                                 "git": [],
-				"sysstat": [],
-				"python-pip" : [],
-				"python-devel" : [],
-				"libxml2-devel" : [],
-				"libxslt-devel" : []
-
+                                "sysstat": [],
+                                "python-pip": [],
+                                "python-devel": [],
+                                "libxml2-devel": [],
+                                "libxslt-devel": []
                             },
                             "rubygems": {
                                 "bundler": [],
                                 "rails": []
                             }
                         },
-			"files" : {
-				"/etc/ec2-credentials.rc" : {
-					"content" : { "Fn::Join" : ["", [
-					      "export AWS_ACCESS_KEY_ID=", { "Ref" : "AwsAccessKey" }, ";\n",
-					      "export AWS_SECRET_ACCESS_KEY=", { "Ref" : "AwsSecretAccessKey" }, ";\n",
-					]]},
-					"mode"  : "000644",
-					"owner" : "root",
-    					"group" : "root"
-				}
-			}
+                        "files": {
+                            "/etc/ec2-credentials.rc": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "export AWS_ACCESS_KEY_ID=", { "Ref": "AwsAccessKey" }, ";\n",
+                                            "export AWS_SECRET_ACCESS_KEY=", { "Ref": "AwsSecretAccessKey" }, ";\n"
+                                        ]
+                                    ]
+                                },
+                                "mode": "000644",
+                                "owner": "root",
+                                "group": "root"
+                            }
+                        },
                         "commands": {
                             "1-clone-repo": {
                                 "cwd": "~",
@@ -62,9 +66,9 @@
                                 "cwd": "~/news-feed",
                                 "command": "bundle"
                             },
-			    "3-start-mysqld" : {
-				"command" : "service mysqld start"
-			    },
+                            "3-start-mysqld": {
+                                "command": "service mysqld start"
+                            },
                             "4-setup-database": {
                                 "cwd": "~/news-feed",
                                 "command": "cp config/database.yml.example config/database.yml"
@@ -91,15 +95,21 @@
                             },
                             "10-install-sar-metrics": {
                                 "cwd": "~",
-                                "command": { "Fn::Join" : ["", [
-					"git clone && cd sar-metrics && ruby metrics-setup.rb scaling.template ", { "Ref" : "StackName" }
-				]]},
+                                "command": {
+                                    "Fn::Join": [
+                                        " ",
+                                        [
+                                            "git clone https://github.com/kkrol89/sar-metrics.git && cd sar-metrics && ruby metrics-setup.rb scaling.template", 
+					    { "Ref": "StackName" }
+                                        ]
+                                    ]
+                                }
                             }
                         }
                     }
                 }
             },
-            "Type": "AWS::AutoScaling::LaunchConfiguration", 
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
             "Properties": {
                 "SecurityGroups": [
                     {
