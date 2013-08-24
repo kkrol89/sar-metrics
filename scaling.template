@@ -13,6 +13,9 @@
         },
         "StackName": {
             "Type": "String"
+        },
+        "DBServerPassword": {
+            "Type": "String"
         }
     },
     "Resources": {
@@ -71,29 +74,43 @@
                             },
                             "4-setup-database": {
                                 "cwd": "~/news-feed",
+				"command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "sed -i '/password:/ s/$/ ", 
+					    { "Ref": "DBServerPassword" },
+				            "/' config/database.yml",
+					    "\n",
+                                            "sed -i '/host:/ s/$/ ", 
+					    { "Fn::GetAtt": [
+		                                "DBServer",
+		                                "DNSName"
+                            		    ] },
+				            "/' config/database.yml",
+					    "\n"
+                                        ]
+                                    ]
+                                }
                                 "command": "cp config/database.yml.example config/database.yml"
                             },
-                            "5-create database": {
-                                "cwd": "~/news-feed",
-                                "command": "rake db:create"
-                            },
-                            "6-start-server": {
+                            "5-start-server": {
                                 "cwd": "~/news-feed",
                                 "command": "rails server -d"
                             },
-                            "7-install-pbr": {
+                            "6-install-pbr": {
                                 "cwd": "~",
                                 "command": "git clone https://github.com/openstack-dev/pbr.git && cd pbr && sudo python setup.py install"
                             },
-                            "8-install-heat-cfnclient": {
+                            "7-install-heat-cfnclient": {
                                 "cwd": "~",
                                 "command": "git clone https://github.com/openstack-dev/heat-cfnclient.git && cd heat-cfnclient && sudo python setup.py install"
                             },
-                            "9-install-sar-metrics": {
+                            "8-install-sar-metrics": {
                                 "cwd": "~",
-                                "command": "echo \"10.1.1.1   monitoring.us-east-1.amazonaws.com\" >> /etc/hosts"
+                                "command": "echo \"10.197.217.60   monitoring.us-east-1.amazonaws.com\" >> /etc/hosts"
                             },
-                            "10-install-sar-metrics": {
+                            "9-install-sar-metrics": {
                                 "cwd": "~",
                                 "command": {
                                     "Fn::Join": [
@@ -110,6 +127,91 @@
                 }
             },
             "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "SecurityGroups": [
+                    {
+                        "Ref": "DefaultSecurityGroup"
+                    }
+                ],
+                "ImageId": "F18-x86_64",
+                "InstanceType": "m1.small",
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "\n",
+                            [
+                                "#!/bin/bash -xe",
+                                "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1",
+                                "# Flush iptables's default rules",
+                                "/sbin/iptables -F",
+                                "/sbin/iptables -X",
+                                "# export proxies",
+                                "echo 'export http_proxy=http://10.197.217.62:3128' >> /etc/bashrc",
+                                "echo 'export https_proxy=http://10.197.217.62:3128' >> /etc/bashrc",
+                                "echo 'export no_proxy=127.0.0.1,localhost' >> /etc/bashrc",
+                                "echo proxy=http://10.197.217.62:3128/ >> /etc/yum.conf",
+                                "source /root/.bashrc",
+                                "echo \"127.0.0.1 $(cat /etc/hostname)\" >> /etc/hosts",
+                                "# calling cfn-init",
+                                "/opt/aws/bin/cfn-init"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+	"DBServer": {
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "config": {
+                        "packages": {
+                            "yum": {
+                                "mysql-server": [],
+                                "git": []
+                            }
+                        },
+                        "commands": {
+                            "1-start-mysqld": {
+                                "cwd": "~",
+                                "command": "mysqld start"
+                            },
+                            "2-configure-mysql": {
+                                "cwd": "~",
+                               "command": {
+                                    "Fn::Join": [
+                                        " ",
+                                        [
+                                            "mysqladmin -u root password", 
+					    { "Ref": "DBServerPassword" }
+                                        ]
+                                    ]
+                                }
+                            },
+                            "3-clone-repo": {
+                                "cwd": "~",
+                                "command": "git clone https://github.com/kkrol89/news-feed.git"
+                            },
+                            "4-import-sql": {
+                                "cwd": "~/news-feed",
+                                "command": {
+                                    "Fn::Join": [
+                                        " ",
+                                        [
+                                            "mysql -u root -p", 
+					    { "Ref": "DBServerPassword" },
+					    "< db/dump.sql"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Type": "AWS::EC2::Instance",
             "Properties": {
                 "SecurityGroups": [
                     {
@@ -298,6 +400,12 @@
                         "IpProtocol": "tcp",
                         "FromPort": "3000",
                         "ToPort": "3000",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+		    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "3306",
+                        "ToPort": "3306",
                         "CidrIp": "0.0.0.0/0"
                     }
                 ],
