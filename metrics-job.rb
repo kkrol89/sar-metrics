@@ -35,6 +35,6 @@ alarms.each do |alarm|
    HeatWatchClient.new.alarm({
      stack_name: stack_name,
      alarm_name: alarm.name
-   }) if false
+   })
  end 
 end

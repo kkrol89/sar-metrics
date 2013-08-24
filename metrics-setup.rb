@@ -32,7 +32,7 @@ alarms.each do |alarm|
     alarm_name: alarm.name,
     namespace: alarm.namespace,
     metric_name: alarm.metric
-  }) if false
+  })
 end
 
 puts "Installing sar-metrics"
