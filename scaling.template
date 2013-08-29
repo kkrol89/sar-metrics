@@ -84,7 +84,7 @@
 		                                "sed -i '/host:/ s/$/ ", 
 						{ "Fn::GetAtt": [
 				                   "DBServer",
-				                   "DNSName"
+				                   "PrivateIp"
 		                    		]},
 						"/' config/database.yml"
 					    ]]}
