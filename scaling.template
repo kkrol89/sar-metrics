@@ -29,7 +29,6 @@
                                 "gcc-c++": [],
                                 "ruby": [],
                                 "ruby-devel": [],
-                                "mysql-server": [],
                                 "mysql-devel": [],
                                 "rubygems": [],
                                 "git": [],
@@ -69,10 +68,7 @@
                                 "cwd": "~/news-feed",
                                 "command": "bundle"
                             },
-                            "3-start-mysqld": {
-                                "command": "service mysqld start"
-                            },
-                            "4-setup-database": {
+                            "3-setup-database": {
                                 "cwd": "~/news-feed",
 				"command": {
                                     "Fn::Join": [
@@ -94,23 +90,23 @@
                                     ]
                                 }
                             },
-                            "5-start-server": {
+                            "4-start-server": {
                                 "cwd": "~/news-feed",
                                 "command": "rails server -d"
                             },
-                            "6-install-pbr": {
+                            "5-install-pbr": {
                                 "cwd": "~",
                                 "command": "git clone https://github.com/openstack-dev/pbr.git && cd pbr && sudo python setup.py install"
                             },
-                            "7-install-heat-cfnclient": {
+                            "6-install-heat-cfnclient": {
                                 "cwd": "~",
                                 "command": "git clone https://github.com/openstack-dev/heat-cfnclient.git && cd heat-cfnclient && sudo python setup.py install"
                             },
-                            "8-install-sar-metrics": {
+                            "7-install-sar-metrics": {
                                 "cwd": "~",
                                 "command": "echo \"10.197.217.60   monitoring.us-east-1.amazonaws.com\" >> /etc/hosts"
                             },
-                            "9-install-sar-metrics": {
+                            "8-install-sar-metrics": {
                                 "cwd": "~",
                                 "command": {
                                     "Fn::Join": [
@@ -200,9 +196,9 @@
                                     "Fn::Join": [
                                         " ",
                                         [
-                                            "mysql -u root -p", 
+                                            "mysql -u root -p ", 
 					    { "Ref": "DBServerPassword" },
-					    "< db/dump.sql"
+					    " < db/dump.sql"
                                         ]
                                     ]
                                 }
