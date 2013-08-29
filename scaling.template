@@ -78,6 +78,7 @@
                                     "Fn::Join": [
                                         "",
                                         [
+					    "cp config/database.yml.example config/database.yml",
                                             "sed -i '/password:/ s/$/ ", 
 					    { "Ref": "DBServerPassword" },
 				            "/' config/database.yml",
@@ -92,7 +93,6 @@
                                         ]
                                     ]
                                 }
-                                "command": "cp config/database.yml.example config/database.yml"
                             },
                             "5-start-server": {
                                 "cwd": "~/news-feed",
