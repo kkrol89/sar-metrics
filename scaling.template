@@ -72,37 +72,40 @@
                                 "cwd": "~/news-feed",
 				"command": {
                                     "Fn::Join": [
-                                        "",
+                                        "\n",
                                         [
 					    "cp config/database.yml.example config/database.yml",
-                                            "sed -i '/password:/ s/$/ ", 
-					    { "Ref": "DBServerPassword" },
-				            "/' config/database.yml",
-					    "\n",
-                                            "sed -i '/host:/ s/$/ ", 
-					    { "Fn::GetAtt": [
-		                                "DBServer",
-		                                "DNSName"
-                            		    ] },
-				            "/' config/database.yml",
-					    "\n"
+					    {"Fn::Join": [ "", [
+                                            	"sed -i '/password:/ s/$/ ", 
+						{ "Ref": "DBServerPassword" },
+					        "/' config/database.yml"
+					    ]]},
+					    {"Fn::Join": [ "", [
+		                                "sed -i '/host:/ s/$/ ", 
+						{ "Fn::GetAtt": [
+				                   "DBServer",
+				                   "DNSName"
+		                    		]},
+						"/' config/database.yml"
+					    ]]}
+
                                         ]
                                     ]
                                 }
                             },
                             "4-start-server": {
                                 "cwd": "~/news-feed",
-                                "command": "rails server -d"
+                                "command": "rails server -d -e production"
                             },
                             "5-install-pbr": {
                                 "cwd": "~",
-                                "command": "git clone https://github.com/openstack-dev/pbr.git && cd pbr && sudo python setup.py install"
+                                "command": "git clone http://github.com/openstack-dev/pbr.git && cd pbr && python setup.py install"
                             },
                             "6-install-heat-cfnclient": {
                                 "cwd": "~",
-                                "command": "git clone https://github.com/openstack-dev/heat-cfnclient.git && cd heat-cfnclient && sudo python setup.py install"
+                                "command": "git clone http://github.com/openstack-dev/heat-cfnclient.git && cd heat-cfnclient && python setup.py install"
                             },
-                            "7-install-sar-metrics": {
+                            "7-configure-cloudwatch-host": {
                                 "cwd": "~",
                                 "command": "echo \"10.197.217.60   monitoring.us-east-1.amazonaws.com\" >> /etc/hosts"
                             },
@@ -178,9 +181,9 @@
                                 "cwd": "~",
                                "command": {
                                     "Fn::Join": [
-                                        " ",
+                                        "",
                                         [
-                                            "mysqladmin -u root password", 
+                                            "mysqladmin -u root password ", 
 					    { "Ref": "DBServerPassword" }
                                         ]
                                     ]
@@ -194,9 +197,9 @@
                                 "cwd": "~/news-feed",
                                 "command": {
                                     "Fn::Join": [
-                                        " ",
+                                        "",
                                         [
-                                            "mysql -u root -p ", 
+                                            "mysql -uroot -p", 
 					    { "Ref": "DBServerPassword" },
 					    " < db/dump.sql"
                                         ]
