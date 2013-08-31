@@ -20,7 +20,7 @@
     },
     "Resources": {
         "WebServerConfig": {
-            "Metadata": {
+	"Metadata": {
                 "AWS::CloudFormation::Init": {
                     "config": {
                         "packages": {
@@ -37,10 +37,6 @@
                                 "python-devel": [],
                                 "libxml2-devel": [],
                                 "libxslt-devel": []
-                            },
-                            "rubygems": {
-                                "bundler": [],
-                                "rails": []
                             }
                         },
                         "files": {
@@ -60,15 +56,21 @@
                             }
                         },
                         "commands": {
-                            "1-clone-repo": {
+			    "A-update-path-variable": {
+			      "command": "echo 'export PATH=$PATH:/usr/local/bin' >> /etc/bashrc"
+                            },
+		            "A-install-bundler": {
+                              "command":"gem install bundler --no-ri --no-rdoc"
+	                    },
+                            "B-clone-repo": {
                                 "cwd": "~",
                                 "command": "git clone https://github.com/kkrol89/news-feed.git"
                             },
-                            "2-run-bundler": {
+                            "C-install-dependencies": {
                                 "cwd": "~/news-feed",
-                                "command": "bundle"
+                                "command": "bundle install --deployment &> bundle_command.log"
                             },
-                            "3-setup-database": {
+                            "D-setup-database": {
                                 "cwd": "~/news-feed",
 				"command": {
                                     "Fn::Join": [
@@ -93,23 +95,27 @@
                                     ]
                                 }
                             },
-                            "4-start-server": {
+			    "E-precompile-assets": {
                                 "cwd": "~/news-feed",
-                                "command": "rails server -d -e production"
+				"command" : "RAILS_ENV=production bundle exec rake assets:precompile &> rake_command.log"
                             },
-                            "5-install-pbr": {
+                            "F-start-server": {
+                                "cwd": "~/news-feed",
+                                "command": "script/rails server -d -e production &> rails_server.log"
+                            },
+                            "G-install-pbr": {
                                 "cwd": "~",
                                 "command": "git clone http://github.com/openstack-dev/pbr.git && cd pbr && python setup.py install"
                             },
-                            "6-install-heat-cfnclient": {
+                            "H-install-heat-cfnclient": {
                                 "cwd": "~",
                                 "command": "git clone http://github.com/openstack-dev/heat-cfnclient.git && cd heat-cfnclient && python setup.py install"
                             },
-                            "7-configure-cloudwatch-host": {
+                            "I-configure-cloudwatch-host": {
                                 "cwd": "~",
                                 "command": "echo \"10.197.217.60   monitoring.us-east-1.amazonaws.com\" >> /etc/hosts"
                             },
-                            "8-install-sar-metrics": {
+                            "J-install-sar-metrics": {
                                 "cwd": "~",
                                 "command": {
                                     "Fn::Join": [
@@ -173,12 +179,12 @@
                             }
                         },
                         "commands": {
-                            "1-start-mysqld": {
+                            "A-start-mysqld": {
                                 "cwd": "~",
-                                "command": "mysqld start"
+                                "command": "service mysqld start"
                             },
-                            "2-configure-mysql": {
-                                "cwd": "~",
+                            "B-configure-mysql": {
+                               "cwd": "~",
                                "command": {
                                     "Fn::Join": [
                                         "",
@@ -189,11 +195,26 @@
                                     ]
                                 }
                             },
-                            "3-clone-repo": {
+			    "C-allow-remote-connections" : {
+				"cwd" : "~",
+				"command" : {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "mysql -uroot -p", 
+					    { "Ref": "DBServerPassword" },
+					    " -e \"GRANT ALL PRIVILEGES ON *.* TO root@'%' IDENTIFIED BY '",
+					    { "Ref": "DBServerPassword" },
+					    "' WITH GRANT OPTION;\""
+                                        ]
+                                    ]
+                                } 
+			    },
+                            "D-clone-repo": {
                                 "cwd": "~",
                                 "command": "git clone https://github.com/kkrol89/news-feed.git"
                             },
-                            "4-import-sql": {
+                            "E-import-sql": {
                                 "cwd": "~/news-feed",
                                 "command": {
                                     "Fn::Join": [
@@ -253,7 +274,7 @@
                 "AvailabilityZones": {
                     "Fn::GetAZs": ""
                 },
-                "LaunchConfigurationName": "WebServerConfig",
+                "LaunchConfigurationName": { "Ref" : "WebServerConfig" },
                 "MinSize": "2",
                 "MaxSize": "4",
 		"LoadBalancerNames" : [ { "Ref" : "ElasticLoadBalancer" } ]
