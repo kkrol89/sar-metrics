@@ -20,7 +20,7 @@
     },
     "Resources": {
         "WebServerConfig": {
-	"Metadata": {
+	    "Metadata": {
                 "AWS::CloudFormation::Init": {
                     "config": {
                         "packages": {
@@ -135,7 +135,7 @@
             "Properties": {
                 "SecurityGroups": [
                     {
-                        "Ref": "DefaultSecurityGroup"
+                        "Ref": "WebSecurityGroup"
                     }
                 ],
                 "ImageId": "F18-x86_64",
@@ -235,11 +235,158 @@
             "Properties": {
                 "SecurityGroups": [
                     {
-                        "Ref": "DefaultSecurityGroup"
+                        "Ref": "DBSecurityGroup"
                     }
                 ],
                 "ImageId": "F18-x86_64",
-                "InstanceType": "m1.small",
+                "InstanceType": "m1.tiny",
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "\n",
+                            [
+                                "#!/bin/bash -xe",
+                                "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1",
+                                "# Flush iptables's default rules",
+                                "/sbin/iptables -F",
+                                "/sbin/iptables -X",
+                                "# export proxies",
+                                "echo 'export http_proxy=http://10.197.217.62:3128' >> /etc/bashrc",
+                                "echo 'export https_proxy=http://10.197.217.62:3128' >> /etc/bashrc",
+                                "echo 'export no_proxy=127.0.0.1,localhost' >> /etc/bashrc",
+                                "echo proxy=http://10.197.217.62:3128/ >> /etc/yum.conf",
+                                "source /root/.bashrc",
+                                "echo \"127.0.0.1 $(cat /etc/hostname)\" >> /etc/hosts",
+                                "# calling cfn-init",
+                                "/opt/aws/bin/cfn-init"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+	"HypervisorServer": {
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "config": {
+                        "packages": {
+                            "yum": {
+                                "nginx": [],
+                                "varnish": []
+                            }
+                        },
+			"files": {
+                            "/etc/varnish/default.vcl": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "\n",
+                                        [
+						"backend default {",
+						"  .host = \"127.0.0.1\";",
+						"  .port = \"3100\";",
+					   	{"Fn::Join": [
+						    "",
+						    [
+							"port=\"",
+							{
+							    "Fn::GetAtt": [
+								"ElasticLoadBalancer",
+								"PrivateIp"
+							    ]
+							},
+							"\;"
+						    ]
+						]},
+						"}",
+						"sub vcl_recv {",
+						"  set req.backend = default;",
+						"  if (req.request != \"GET\" && req.request != \"HEAD\") {",
+						"    return(pass);",
+						"  }",
+						"  if (req.url ~ \"^/assets\") {",
+						"    return(lookup);",
+						"  } else {",
+						"    return(pass);",
+						"  }",
+						"}",
+						"sub vcl_fetch {",
+						"  if (req.url ~ \"^/assets\") {  ",
+						"    set beresp.ttl = 1d;",
+						"  }"
+						"  return(deliver);"
+						"}"
+                                        ]
+                                    ]
+                                },
+                                "mode": "000644",
+                                "owner": "root",
+                                "group": "root"
+                            },
+			    "/etc/nginx/nginx.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "\n",
+                                        [
+						"user  nginx;",
+						"worker_processes  10;",
+						"error_log  /var/log/nginx/error.log;",
+						"pid        /run/nginx.pid;",
+						"events {",
+						"    worker_connections  1024;",
+						"}",
+						"http {",
+						"    include       /etc/nginx/mime.types;",
+						"    default_type  application/octet-stream;",
+						"    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '",
+						"                      '$status $body_bytes_sent "$http_referer" '",
+						"                      '"$http_user_agent" "$http_x_forwarded_for"';",
+						"    access_log  /var/log/nginx/access.log  main;",
+						"    sendfile        on;",
+						"    keepalive_timeout  65;",
+						"    include /etc/nginx/conf.d/*.conf;",
+						"    server {",
+						"        listen       80;"
+						"        server_name  localhost;"
+						"        access_log  /var/log/nginx/host.access.log  main;",
+						"        location / {",
+						"            proxy_pass http://localhost:3101;",
+						"            proxy_redirect     off;",
+						"            proxy_set_header   Host $host;",
+						"        }",
+						"    }",
+						"}"
+
+                                        ]
+                                    ]
+                                },
+                                "mode": "000644",
+                                "owner": "root",
+                                "group": "root"
+                            }
+			},
+                        "commands": {
+                            "A-restart-nginx": {
+                                "command": "service nginx restart"
+                            },
+                            "B-restart-varnish": {
+                               "command": "service varnish restart"
+                            }
+                        }
+                    }
+                }
+            },
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "SecurityGroups": [
+                    {
+                        "Ref": "HypervisorSecurityGroup"
+                    }
+                ],
+                "ImageId": "F18-x86_64",
+                "InstanceType": "m1.tiny",
                 "KeyName": {
                     "Ref": "KeyName"
                 },
@@ -406,7 +553,7 @@
                 "ComparisonOperator": "LessThanThreshold"
             }
         },
-        "DefaultSecurityGroup": {
+        "WebSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "Allow ssh connection to host",
@@ -422,11 +569,47 @@
                         "FromPort": "3000",
                         "ToPort": "3000",
                         "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": []
+            }
+        },
+        "DBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow ssh connection to host",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": "0.0.0.0/0"
                     },
 		    {
                         "IpProtocol": "tcp",
                         "FromPort": "3306",
                         "ToPort": "3306",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": []
+            }
+        },
+        "HypervisorSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow ssh connection to host",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+		    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
                         "CidrIp": "0.0.0.0/0"
                     }
                 ],
@@ -467,7 +650,7 @@
                         {
                             "Fn::GetAtt": [
                                 "ElasticLoadBalancer",
-                                "DNSName"
+                                "PrivateIp"
                             ]
                         }
                     ]
