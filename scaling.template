@@ -275,7 +275,8 @@
                         "packages": {
                             "yum": {
                                 "nginx": [],
-                                "varnish": []
+                                "varnish": [],
+                                "redhat-rpm-config": []
                             }
                         },
 			"files": {
