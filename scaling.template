@@ -20,7 +20,7 @@
     },
     "Resources": {
         "WebServerConfig": {
-	    "Metadata": {
+        "Metadata": {
                 "AWS::CloudFormation::Init": {
                     "config": {
                         "packages": {
@@ -285,21 +285,20 @@
                                         "\n",
                                         [
 						"backend default {",
-						"  .host = \"127.0.0.1\";",
-						"  .port = \"3100\";",
 					   	{"Fn::Join": [
 						    "",
 						    [
-							"port=\"",
+							".host=\"",
 							{
 							    "Fn::GetAtt": [
 								"ElasticLoadBalancer",
 								"PrivateIp"
 							    ]
 							},
-							"\;"
+							"\";"
 						    ]
 						]},
+                        "  .port = \"3100\";",
 						"}",
 						"sub vcl_recv {",
 						"  set req.backend = default;",
@@ -315,8 +314,8 @@
 						"sub vcl_fetch {",
 						"  if (req.url ~ \"^/assets\") {  ",
 						"    set beresp.ttl = 1d;",
-						"  }"
-						"  return(deliver);"
+						"  }",
+						"  return(deliver);",
 						"}"
                                         ]
                                     ]
@@ -340,16 +339,16 @@
 						"http {",
 						"    include       /etc/nginx/mime.types;",
 						"    default_type  application/octet-stream;",
-						"    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '",
-						"                      '$status $body_bytes_sent "$http_referer" '",
-						"                      '"$http_user_agent" "$http_x_forwarded_for"';",
+						"    log_format  main  '$remote_addr - $remote_user [$time_local] \"$request\" '",
+						"                      '$status $body_bytes_sent \"$http_referer\" '",
+						"                      '\"$http_user_agent\" \"$http_x_forwarded_for\"';",
 						"    access_log  /var/log/nginx/access.log  main;",
 						"    sendfile        on;",
 						"    keepalive_timeout  65;",
 						"    include /etc/nginx/conf.d/*.conf;",
 						"    server {",
-						"        listen       80;"
-						"        server_name  localhost;"
+						"        listen       80;",
+						"        server_name  localhost;",
 						"        access_log  /var/log/nginx/host.access.log  main;",
 						"        location / {",
 						"            proxy_pass http://localhost:3101;",
