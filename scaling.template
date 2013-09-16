@@ -289,7 +289,7 @@
 					   	{"Fn::Join": [
 						    "",
 						    [
-							".host=\"",
+							"  .host=\"",
 							{
 							    "Fn::GetAtt": [
 								"ElasticLoadBalancer",
@@ -299,7 +299,7 @@
 							"\";"
 						    ]
 						]},
-                        "  .port = \"3100\";",
+                                                "  .port = \"80\";",
 						"}",
 						"sub vcl_recv {",
 						"  set req.backend = default;",
@@ -352,7 +352,7 @@
 						"        server_name  localhost;",
 						"        access_log  /var/log/nginx/host.access.log  main;",
 						"        location / {",
-						"            proxy_pass http://localhost:3101;",
+						"            proxy_pass http://localhost:6087;",
 						"            proxy_redirect     off;",
 						"            proxy_set_header   Host $host;",
 						"        }",
